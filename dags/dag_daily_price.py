@@ -18,8 +18,8 @@ from airflow.operators.python import PythonOperator
 from common.db import get_engine
 from common.quality import check_freshness, check_null_ratio, check_row_count
 
-# 주요 ETF 및 대형주 (종목코드 → yfinance 티커)
-TARGET_STOCKS = {
+# 기본 종목 (dim_stock이 비어있을 때 사용)
+DEFAULT_STOCKS = {
     "069500": "069500.KS",  # KODEX 200
     "005930": "005930.KS",  # 삼성전자
     "000660": "000660.KS",  # SK하이닉스
@@ -42,6 +42,28 @@ TARGET_STOCKS = {
     "096770": "096770.KS",  # SK이노베이션
 }
 
+
+def _get_target_stocks(engine) -> dict[str, str]:
+    """Get target stocks from dim_stock table, fallback to defaults."""
+    try:
+        df = pd.read_sql(
+            "SELECT stock_code, market_type FROM mart.dim_stock "
+            "WHERE stock_code IS NOT NULL ORDER BY market_cap DESC NULLS LAST",
+            engine,
+        )
+        if df.empty:
+            return DEFAULT_STOCKS
+
+        stocks = {}
+        for _, row in df.iterrows():
+            code = row["stock_code"]
+            suffix = ".KS" if row.get("market_type") == "KOSPI" else ".KQ"
+            stocks[code] = f"{code}{suffix}"
+        return stocks
+    except Exception as e:
+        print(f"Failed to load stocks from dim_stock, using defaults: {e}")
+        return DEFAULT_STOCKS
+
 default_args = {
     "owner": "data-engineer",
     "retries": 3,
@@ -55,7 +77,10 @@ def extract_daily_prices(**context):
     execution_date = context["ds"]
     total_inserted = 0
 
-    for stock_code, ticker in TARGET_STOCKS.items():
+    target_stocks = _get_target_stocks(engine)
+    print(f"Collecting prices for {len(target_stocks)} stocks")
+
+    for stock_code, ticker in target_stocks.items():
         try:
             df = yf.download(
                 tickers=ticker,

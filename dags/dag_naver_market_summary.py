@@ -9,6 +9,8 @@ Schedule: 매일 오후 4시 (장 마감 후)
 
 from datetime import datetime, timedelta
 
+import re
+
 import numpy as np
 import pandas as pd
 import requests
@@ -69,6 +71,14 @@ def _crawl_page(market_code: str, page: int, fields: list[str]) -> pd.DataFrame:
         item.get_text().strip() for item in table_html.select("thead th")
     ][1:-1]
 
+    # Extract stock codes from <a class="tltle" href="/item/main.naver?code=XXXXXX">
+    stock_codes = []
+    for a_tag in table_html.find_all("a", class_="tltle"):
+        href = a_tag.get("href", "")
+        match = re.search(r"code=(\d+)", href)
+        if match:
+            stock_codes.append(match.group(1))
+
     inner_data = [
         item.get_text().strip()
         for item in table_html.find_all(
@@ -81,7 +91,16 @@ def _crawl_page(market_code: str, page: int, fields: list[str]) -> pd.DataFrame:
     arr = np.array(inner_data)
     arr.resize(len(no_data), len(headers))
 
-    return pd.DataFrame(data=arr, columns=headers)
+    df = pd.DataFrame(data=arr, columns=headers)
+
+    # Add stock_code column from extracted href codes
+    if stock_codes and len(stock_codes) == len(df):
+        df["stock_code"] = stock_codes
+    else:
+        # Fallback: use row index (should not happen with valid HTML)
+        df["stock_code"] = df.index.astype(str).str.zfill(6)
+
+    return df
 
 
 def extract_naver_market(**context):
@@ -125,6 +144,9 @@ def extract_naver_market(**context):
         # Keep only columns that exist in our raw table
         valid_cols = [c for c in column_map.values() if c in df_raw.columns]
         valid_cols.append("market_type")
+        # Include stock_code from crawled data
+        if "stock_code" in df_raw.columns:
+            valid_cols.append("stock_code")
         df_raw = df_raw[valid_cols]
 
         df_raw.to_sql(
@@ -146,10 +168,11 @@ def transform_to_dim_stock(**context):
 
     query = """
         WITH latest AS (
-            SELECT DISTINCT ON (stock_name, market_type)
-                stock_name, market_type, roe, per, pbr, market_cap, ingested_at
+            SELECT DISTINCT ON (stock_code)
+                stock_code, stock_name, market_type, roe, per, pbr, market_cap, ingested_at
             FROM raw.naver_market_summary
-            ORDER BY stock_name, market_type, ingested_at DESC
+            WHERE stock_code IS NOT NULL
+            ORDER BY stock_code, ingested_at DESC
         )
         SELECT * FROM latest
     """
@@ -171,11 +194,6 @@ def transform_to_dim_stock(**context):
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
     df["updated_at"] = datetime.now()
-
-    # We don't have stock_code from Naver summary, use stock_name as temp key
-    df = df.rename(columns={"stock_name": "stock_name_temp"})
-    df["stock_code"] = df.index.astype(str).str.zfill(6)  # placeholder
-    df["stock_name"] = df["stock_name_temp"]
 
     result = df[["stock_code", "stock_name", "market_type", "roe", "per", "pbr", "market_cap", "updated_at"]]
 

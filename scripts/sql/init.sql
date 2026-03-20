@@ -23,9 +23,13 @@ CREATE TABLE IF NOT EXISTS raw.naver_market_summary (
     roe             VARCHAR(20),
     per             VARCHAR(20),
     pbr             VARCHAR(20),
+    stock_code      VARCHAR(10),
     market_type     VARCHAR(10),  -- KOSPI / KOSDAQ
     ingested_at     TIMESTAMP DEFAULT NOW()
 );
+
+CREATE INDEX IF NOT EXISTS idx_raw_naver_market_summary_code
+    ON raw.naver_market_summary (stock_code);
 
 CREATE TABLE IF NOT EXISTS raw.daily_price (
     id          SERIAL PRIMARY KEY,
