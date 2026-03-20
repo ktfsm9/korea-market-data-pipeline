@@ -33,9 +33,9 @@ def build_market_summary(**context):
             f.trade_date,
             d.market_type,
             COUNT(DISTINCT f.stock_code) AS total_stocks,
-            ROUND(AVG(d.per), 2) AS avg_per,
-            ROUND(AVG(d.pbr), 2) AS avg_pbr,
-            ROUND(AVG(d.roe), 2) AS avg_roe,
+            ROUND(AVG(d.per)::numeric, 2) AS avg_per,
+            ROUND(AVG(d.pbr)::numeric, 2) AS avg_pbr,
+            ROUND(AVG(d.roe)::numeric, 2) AS avg_roe,
             SUM(f.volume) AS total_volume,
             SUM(d.market_cap) AS total_market_cap
         FROM mart.fact_daily_price f
