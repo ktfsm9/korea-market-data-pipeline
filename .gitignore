@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+
+# Environment
+.env
+
+# Airflow
+logs/
+airflow-webserver.pid
+
+# OS
+.DS_Store
+
+# Data
+*.csv
+*.xlsx
