@@ -4,4 +4,4 @@ USER airflow
 
 COPY requirements-airflow.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt && \
-    pip install --no-cache-dir "sqlalchemy>=1.4,<2.0"
+    pip install --no-cache-dir --force-reinstall "sqlalchemy>=1.4,<2.0"

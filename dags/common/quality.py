@@ -3,6 +3,7 @@
 from datetime import datetime
 
 import pandas as pd
+from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 
@@ -34,7 +35,7 @@ def check_row_count(engine: Engine, table_name: str, min_rows: int) -> bool:
     """Check if a table has at least min_rows rows."""
     with engine.connect() as conn:
         result = conn.execute(
-            pd.io.sql.sqlalchemy.text(f"SELECT COUNT(*) FROM {table_name}")
+            text(f"SELECT COUNT(*) FROM {table_name}")
         )
         count = result.scalar()
 
@@ -57,7 +58,7 @@ def check_null_ratio(
     """Check if null ratio for a column is below threshold."""
     with engine.connect() as conn:
         result = conn.execute(
-            pd.io.sql.sqlalchemy.text(
+            text(
                 f"""
                 SELECT
                     COUNT(*) AS total,
@@ -89,7 +90,7 @@ def check_freshness(
     """Check if the most recent data is within max_age_hours."""
     with engine.connect() as conn:
         result = conn.execute(
-            pd.io.sql.sqlalchemy.text(
+            text(
                 f"SELECT MAX({date_column}) FROM {table_name}"
             )
         )

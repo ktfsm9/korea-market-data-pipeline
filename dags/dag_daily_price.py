@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 import yfinance as yf
 from airflow import DAG
+from sqlalchemy import text as sa_text
 from airflow.operators.python import PythonOperator
 
 from common.db import get_engine
@@ -149,7 +150,7 @@ def transform_to_fact_daily_price(**context):
         dates = df["trade_date"].unique()
         for date in dates:
             conn.execute(
-                pd.io.sql.sqlalchemy.text(
+                sa_text(
                     "DELETE FROM mart.fact_daily_price WHERE trade_date = :dt"
                 ),
                 {"dt": str(date)},

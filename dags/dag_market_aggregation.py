@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 
 import pandas as pd
 from airflow import DAG
+from sqlalchemy import text as sa_text
 from airflow.operators.python import PythonOperator
 
 from common.db import get_engine
@@ -57,7 +58,7 @@ def build_market_summary(**context):
         dates = df["trade_date"].unique()
         for date in dates:
             conn.execute(
-                pd.io.sql.sqlalchemy.text(
+                sa_text(
                     "DELETE FROM mart.agg_market_summary WHERE trade_date = :dt"
                 ),
                 {"dt": str(date)},
