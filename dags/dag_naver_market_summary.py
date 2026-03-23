@@ -11,7 +11,6 @@ from datetime import datetime, timedelta
 
 import re
 
-import numpy as np
 import pandas as pd
 import requests
 from airflow import DAG
@@ -22,6 +21,8 @@ from common.db import get_engine
 from common.quality import check_null_ratio, check_row_count
 
 BASE_URL = "https://finance.naver.com/sise/sise_market_sum.nhn?sosok="
+SECTOR_LIST_URL = "https://finance.naver.com/sise/sise_group.naver?type=upjong"
+SECTOR_DETAIL_URL = "https://finance.naver.com/sise/sise_group_detail.naver?type=upjong&no="
 MARKET_CODES = {"0": "KOSPI", "1": "KOSDAQ"}
 
 default_args = {
@@ -71,36 +72,36 @@ def _crawl_page(market_code: str, page: int, fields: list[str]) -> pd.DataFrame:
         item.get_text().strip() for item in table_html.select("thead th")
     ][1:-1]
 
-    # Extract stock codes from <a class="tltle" href="/item/main.naver?code=XXXXXX">
-    stock_codes = []
-    for a_tag in table_html.find_all("a", class_="tltle"):
+    # Parse row-by-row to keep stock_code aligned with data
+    rows = []
+    for tr in table_html.select("tbody tr"):
+        if not tr.select("td.no"):
+            continue
+
+        a_tag = tr.select_one("a.tltle")
+        if not a_tag:
+            continue
+
         href = a_tag.get("href", "")
         match = re.search(r"code=(\d+)", href)
-        if match:
-            stock_codes.append(match.group(1))
+        if not match:
+            continue
+        stock_code = match.group(1)
 
-    inner_data = [
-        item.get_text().strip()
-        for item in table_html.find_all(
-            lambda x: (x.name == "a" and "tltle" in x.get("class", []))
-            or (x.name == "td" and "number" in x.get("class", []))
-        )
-    ]
+        # Build cell values: stock name + numeric columns
+        cells = [a_tag.get_text().strip()]
+        for td in tr.select("td.number"):
+            cells.append(td.get_text().strip())
 
-    no_data = [item.get_text().strip() for item in table_html.select("td.no")]
-    arr = np.array(inner_data)
-    arr.resize(len(no_data), len(headers))
+        if len(cells) == len(headers):
+            row_data = dict(zip(headers, cells))
+            row_data["stock_code"] = stock_code
+            rows.append(row_data)
 
-    df = pd.DataFrame(data=arr, columns=headers)
+    if not rows:
+        return pd.DataFrame()
 
-    # Add stock_code column from extracted href codes
-    if stock_codes and len(stock_codes) == len(df):
-        df["stock_code"] = stock_codes
-    else:
-        # Fallback: use row index (should not happen with valid HTML)
-        df["stock_code"] = df.index.astype(str).str.zfill(6)
-
-    return df
+    return pd.DataFrame(rows)
 
 
 def extract_naver_market(**context):
@@ -162,6 +163,56 @@ def extract_naver_market(**context):
     print(f"Extracted {total_inserted} rows from Naver Finance")
 
 
+def extract_sector_info(**context):
+    """Extract: Crawl sector (업종) info from Naver Finance."""
+    engine = get_engine()
+
+    res = requests.get(SECTOR_LIST_URL, timeout=30)
+    soup = BeautifulSoup(res.text, "lxml")
+
+    # Collect sector IDs and names from the sector list page
+    sectors = []
+    for a_tag in soup.select("a[href*='sise_group_detail']"):
+        href = a_tag.get("href", "")
+        match = re.search(r"no=(\d+)", href)
+        if match:
+            sectors.append((match.group(1), a_tag.get_text().strip()))
+
+    rows = []
+    for sector_id, sector_name in sectors:
+        try:
+            detail_res = requests.get(
+                f"{SECTOR_DETAIL_URL}{sector_id}", timeout=30
+            )
+            detail_soup = BeautifulSoup(detail_res.text, "lxml")
+
+            for a_tag in detail_soup.select("a.name_area"):
+                href = a_tag.get("href", "")
+                code_match = re.search(r"code=(\d+)", href)
+                if code_match:
+                    rows.append({
+                        "sector_name": sector_name,
+                        "stock_code": code_match.group(1),
+                        "stock_name": a_tag.get_text().strip(),
+                    })
+        except Exception as e:
+            print(f"Error fetching sector {sector_name}: {e}")
+
+    if not rows:
+        print("No sector data extracted")
+        return
+
+    df = pd.DataFrame(rows)
+    df.to_sql(
+        "sector_info",
+        engine,
+        schema="raw",
+        if_exists="replace",
+        index=False,
+    )
+    print(f"Extracted {len(df)} sector-stock mappings")
+
+
 def transform_to_dim_stock(**context):
     """Transform: Build dim_stock from latest raw data."""
     engine = get_engine()
@@ -173,8 +224,16 @@ def transform_to_dim_stock(**context):
             FROM raw.naver_market_summary
             WHERE stock_code IS NOT NULL
             ORDER BY stock_code, ingested_at DESC
+        ),
+        sector AS (
+            SELECT DISTINCT ON (stock_code)
+                stock_code, sector_name
+            FROM raw.sector_info
+            ORDER BY stock_code
         )
-        SELECT * FROM latest
+        SELECT l.*, s.sector_name AS sector
+        FROM latest l
+        LEFT JOIN sector s ON l.stock_code = s.stock_code
     """
     df = pd.read_sql(query, engine)
 
@@ -195,7 +254,7 @@ def transform_to_dim_stock(**context):
 
     df["updated_at"] = datetime.now()
 
-    result = df[["stock_code", "stock_name", "market_type", "roe", "per", "pbr", "market_cap", "updated_at"]]
+    result = df[["stock_code", "stock_name", "market_type", "sector", "roe", "per", "pbr", "market_cap", "updated_at"]]
 
     # Upsert to mart.dim_stock
     result.to_sql(
@@ -234,6 +293,11 @@ with DAG(
         python_callable=extract_naver_market,
     )
 
+    extract_sector = PythonOperator(
+        task_id="extract_sector_info",
+        python_callable=extract_sector_info,
+    )
+
     transform = PythonOperator(
         task_id="transform_to_dim_stock",
         python_callable=transform_to_dim_stock,
@@ -244,4 +308,4 @@ with DAG(
         python_callable=run_quality_checks,
     )
 
-    extract >> transform >> quality
+    [extract, extract_sector] >> transform >> quality

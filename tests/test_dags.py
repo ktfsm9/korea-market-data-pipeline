@@ -81,6 +81,7 @@ class TestDagNaverMarketSummary:
         task_ids = {t.task_id for t in dag.tasks}
         assert task_ids == {
             "extract_naver_market",
+            "extract_sector_info",
             "transform_to_dim_stock",
             "run_quality_checks",
         }
@@ -88,9 +89,11 @@ class TestDagNaverMarketSummary:
     def test_dag_task_order(self):
         from dag_naver_market_summary import dag
         extract = dag.get_task("extract_naver_market")
+        extract_sector = dag.get_task("extract_sector_info")
         transform = dag.get_task("transform_to_dim_stock")
         quality = dag.get_task("run_quality_checks")
         assert "transform_to_dim_stock" in [t.task_id for t in extract.downstream_list]
+        assert "transform_to_dim_stock" in [t.task_id for t in extract_sector.downstream_list]
         assert "run_quality_checks" in [t.task_id for t in transform.downstream_list]
 
     def test_market_codes(self):
