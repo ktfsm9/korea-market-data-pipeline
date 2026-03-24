@@ -17,9 +17,9 @@ Apache Airflow로 파이프라인을 오케스트레이션하고, PostgreSQL에 
            │                   │
            ▼                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│              Apache Airflow (Orchestration)                  │
+│              Apache Airflow (Orchestration)                 │
 │   ┌────────────────────┐  ┌────────────────────┐            │
-│   │ naver_market_summary│  │ daily_stock_price  │            │
+│   │ naver_market_summary│  │ daily_stock_price │            │
 │   │   DAG (16:00)      │  │   DAG (17:00)      │            │
 │   └────────┬───────────┘  └────────┬───────────┘            │
 │            │                       │                        │
@@ -33,36 +33,36 @@ Apache Airflow로 파이프라인을 오케스트레이션하고, PostgreSQL에 
 │   │  (row_count, null_ratio, freshness)     │               │
 │   └─────────────────────────────────────────┘               │
 └─────────────────────────────────────────────────────────────┘
-           │
-           ▼
+            │
+            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                   PostgreSQL Database                        │
+│                   PostgreSQL Database                       │
 │                                                             │
-│   ┌─────────┐    ┌───────────┐    ┌──────────┐             │
-│   │   raw   │───▶│  (transform) ──▶│   mart   │             │
-│   │         │    │           │    │          │              │
-│   │ • naver │    │  dedup    │    │ • dim    │              │
-│   │   market│    │  clean    │    │   _stock │              │
-│   │ • daily │    │  enrich   │    │ • fact   │              │
-│   │   price │    │           │    │   _daily │              │
-│   │ • sector│    │           │    │ • agg    │              │
-│   │   info  │    │           │    │   _market│              │
-│   └─────────┘    └───────────┘    └──────────┘             │
+│   ┌─────────┐     ┌───────────┐     ┌──────────┐            │
+│   │   raw   │───▶│(transform)│ ──▶│   mart   │            │
+│   │         │     │           │     │          │            │
+│   │ • naver │     │  dedup    │     │ • dim    │            │
+│   │   market│     │  clean    │     │   _stock │            │
+│   │ • daily │     │  enrich   │     │ • fact   │            │
+│   │   price │     │           │     │   _daily │            │
+│   │ • sector│     │           │     │ • agg    │            │
+│   │   info  │     │           │     │   _market│            │
+│   └─────────┘     └───────────┘     └──────────┘            │
 │                                                             │
 │   ┌─────────────────────────────────────────┐               │
 │   │         data_quality_log                │               │
 │   └─────────────────────────────────────────┘               │
 └─────────────────────────────────────────────────────────────┘
-           │
-           ▼
+            │
+            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                    FastAPI (Data Serving)                    │
+│                    FastAPI (Data Serving)                   │
 │                                                             │
-│   GET /stocks              종목 마스터 목록                   │
+│   GET /stocks              종목 마스터 목록                  │
 │   GET /stocks/{code}       종목 상세 정보                    │
 │   GET /stocks/{code}/prices 종목 일봉 가격                   │
 │   GET /markets/summary     시장별 집계                       │
-│   GET /quality/logs        데이터 품질 로그                   │
+│   GET /quality/logs        데이터 품질 로그                  │
 │                                                             │
 │   Swagger UI: http://localhost:8000/docs                    │
 └─────────────────────────────────────────────────────────────┘
