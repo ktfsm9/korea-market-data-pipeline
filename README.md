@@ -18,12 +18,12 @@ Apache Airflow로 파이프라인을 오케스트레이션하고, PostgreSQL에 
            ▼                   ▼
 ┌─────────────────────────────────────────────────────────────┐
 │              Apache Airflow (Orchestration)                 │
-│   ┌────────────────────┐  ┌────────────────────┐            │
-│   │ naver_market_summary│  │ daily_stock_price │            │
-│   │   DAG (16:00)      │  │   DAG (17:00)      │            │
-│   └────────┬───────────┘  └────────┬───────────┘            │
-│            │                       │                        │
-│            ▼                       ▼                        │
+│   ┌─────────────────────┐  ┌────────────────────┐           │
+│   │ naver_market_summary│  │ daily_stock_price  │           │
+│   │   DAG (16:00)       │  │   DAG (17:00)      │           │
+│   └────────┬────────────┘  └────────┬───────────┘           │
+│            │                        │                       │
+│            ▼                        ▼                       │
 │   ┌─────────────────────────────────────────┐               │
 │   │       market_aggregation DAG (18:00)    │               │
 │   └─────────────────────┬───────────────────┘               │
@@ -58,11 +58,11 @@ Apache Airflow로 파이프라인을 오케스트레이션하고, PostgreSQL에 
 ┌─────────────────────────────────────────────────────────────┐
 │                    FastAPI (Data Serving)                   │
 │                                                             │
-│   GET /stocks              종목 마스터 목록                  │
-│   GET /stocks/{code}       종목 상세 정보                    │
+│   GET /stocks               종목 마스터 목록                 │
+│   GET /stocks/{code}        종목 상세 정보                   │
 │   GET /stocks/{code}/prices 종목 일봉 가격                   │
-│   GET /markets/summary     시장별 집계                       │
-│   GET /quality/logs        데이터 품질 로그                  │
+│   GET /markets/summary      시장별 집계                      │
+│   GET /quality/logs         데이터 품질 로그                 │
 │                                                             │
 │   Swagger UI: http://localhost:8000/docs                    │
 └─────────────────────────────────────────────────────────────┘
@@ -129,7 +129,7 @@ korea-market-data-pipeline/
 
 - **row_count**: 최소 행 수 검증
 - **null_ratio**: NULL 비율 검증
-- **freshness**: 데이터 신선도 검증
+- **freshness**: 데이터 freshness 검증
 
 ## Airflow DAGs
 
@@ -178,7 +178,7 @@ docker-compose exec airflow-scheduler airflow dags trigger market_aggregation
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/health` | 헬스 체크 |
+| GET | `/health` | 상태 체크 |
 | GET | `/stocks` | 종목 목록 (시장 필터, 시가총액 정렬) |
 | GET | `/stocks/{code}` | 종목 상세 정보 |
 | GET | `/stocks/{code}/prices` | 일봉 가격 데이터 (날짜 범위 필터) |
